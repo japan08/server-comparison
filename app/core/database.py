@@ -35,3 +35,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+async def initialize_database() -> None:
+    """Create local SQLite tables automatically for dev/test runs."""
+    if engine.url.get_backend_name() != "sqlite":
+        return
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

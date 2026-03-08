@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_DATABASE_URL = "postgresql://cloud_compare:nitsan123@localhost:5432/cloud_compare"
+DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./cloud_compare.db"
 
 
 def _normalize_database_url(url: str) -> str:

@@ -22,6 +22,15 @@ async_session_factory = async_sessionmaker(
 )
 
 
+async def init_database() -> None:
+    # SQLite is the local fallback, so bootstrap its schema automatically.
+    if engine.url.get_backend_name() != "sqlite":
+        return
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         try:

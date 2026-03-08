@@ -4,13 +4,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_DATABASE_URL = "postgresql://cloud_compare:nitsan123@localhost:5432/cloud_compare"
+DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./cloud_compare.db"
 
 
 def _normalize_database_url(url: str) -> str:
     if url.startswith("postgresql://") and "+asyncpg" not in url:
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     return url
+
+
+def is_sqlite_url(url: str) -> bool:
+    return url.startswith("sqlite")
 
 
 def get_settings() -> object:

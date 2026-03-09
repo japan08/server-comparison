@@ -14,13 +14,19 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
-from app.models import InstancePricing, InstanceType, Provider, Region
+from app.models import Base, InstancePricing, InstanceType, Provider, Region
 
 
 def _normalize_url(url: str) -> str:
     if url.startswith("postgresql://") and "+asyncpg" not in url:
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if url.startswith("sqlite:///") and "+aiosqlite" not in url:
+        return url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
     return url
+
+
+def _is_sqlite_url(url: str) -> bool:
+    return url.startswith("sqlite+aiosqlite://") or url.startswith("sqlite:///")
 
 
 def _permission_help() -> None:
@@ -35,6 +41,9 @@ async def seed() -> None:
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     try:
+        if _is_sqlite_url(url):
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
         async with async_session() as session:
             existing = await session.execute(select(Provider.id).limit(1))
             if existing.scalar_one_or_none() is None:

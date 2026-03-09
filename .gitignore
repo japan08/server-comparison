@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+cloud_compare.db
+cloud_compare.db-shm
+cloud_compare.db-wal

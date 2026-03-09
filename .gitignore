@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+cloud_compare.db
+cloud_compare.db-shm
+cloud_compare.db-wal

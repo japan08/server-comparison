@@ -11,17 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.core import database
 from app.models import InstancePricing, InstanceType, Provider, Region
-
-
-def _normalize_url(url: str) -> str:
-    if url.startswith("postgresql://") and "+asyncpg" not in url:
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    return url
-
 
 def _permission_help() -> None:
     print("\nPermission denied: the DB user needs table privileges. As postgres superuser, run:")
@@ -30,12 +23,10 @@ def _permission_help() -> None:
 
 
 async def seed() -> None:
-    url = _normalize_url(get_settings().database_url)
-    engine = create_async_engine(url, echo=False)
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    await database.ensure_database_ready()
 
     try:
-        async with async_session() as session:
+        async with database.async_session_factory() as session:
             existing = await session.execute(select(Provider.id).limit(1))
             if existing.scalar_one_or_none() is None:
                 await _seed_initial(session)
@@ -47,8 +38,6 @@ async def seed() -> None:
         if "permission denied" in err or "insufficientprivilege" in err:
             _permission_help()
         raise
-
-    await engine.dispose()
 
 
 async def _seed_initial(session: AsyncSession) -> None:

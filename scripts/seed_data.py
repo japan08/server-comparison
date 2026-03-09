@@ -10,11 +10,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
-from app.models import InstancePricing, InstanceType, Provider, Region
+from app.models import Base, InstancePricing, InstanceType, Provider, Region
 
 
 def _normalize_url(url: str) -> str:
@@ -29,24 +30,55 @@ def _permission_help() -> None:
     print("(Replace ai_bug_agent with the user in your DATABASE_URL if different.)\n")
 
 
+def _should_fallback_to_local_db(database_url: str, error: Exception) -> bool:
+    db_url = make_url(database_url)
+    is_local_postgres = db_url.drivername.startswith("postgresql") and db_url.host in {
+        None,
+        "",
+        "localhost",
+        "127.0.0.1",
+    }
+    if not is_local_postgres:
+        return False
+
+    error_text = str(error).lower()
+    return isinstance(error, OSError) or "connection refused" in error_text
+
+
+async def _run_seed(async_session: async_sessionmaker[AsyncSession], engine) -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+
+    async with async_session() as session:
+        existing = await session.execute(select(Provider.id).limit(1))
+        if existing.scalar_one_or_none() is None:
+            await _seed_initial(session)
+        else:
+            await _seed_more_regions(session)
+            await _seed_larger_instances(session)
+
+
 async def seed() -> None:
-    url = _normalize_url(get_settings().database_url)
+    settings = get_settings()
+    url = _normalize_url(settings.database_url)
     engine = create_async_engine(url, echo=False)
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     try:
-        async with async_session() as session:
-            existing = await session.execute(select(Provider.id).limit(1))
-            if existing.scalar_one_or_none() is None:
-                await _seed_initial(session)
-            else:
-                await _seed_more_regions(session)
-                await _seed_larger_instances(session)
+        await _run_seed(async_session, engine)
     except ProgrammingError as e:
         err = str(e).lower()
         if "permission denied" in err or "insufficientprivilege" in err:
             _permission_help()
         raise
+    except Exception as error:
+        if not _should_fallback_to_local_db(url, error):
+            raise
+
+        await engine.dispose()
+        engine = create_async_engine(settings.local_database_url, echo=False)
+        async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        await _run_seed(async_session, engine)
 
     await engine.dispose()
 

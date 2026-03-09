@@ -399,16 +399,16 @@
           </select>
         </div>
       </div>
-      <div class="toggle-row">
-        <span class="toggle-label">Include AI explanation (requires Ollama)</span>
-        <button class="toggle" id="explainToggle" onclick="this.classList.toggle('on')" aria-label="Toggle AI explanation"></button>
-      </div>
     </div>
     <div class="nl-panel" id="nlPanel">
       <div class="field">
         <label>Describe your requirements</label>
         <textarea id="nlQuery" placeholder="e.g. I need 4 vCPUs, 16GB RAM in Europe, max $100 per month"></textarea>
       </div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Include AI explanation (requires Ollama)</span>
+      <button class="toggle" id="explainToggle" onclick="this.classList.toggle('on')" aria-label="Toggle AI explanation"></button>
     </div>
     <button class="btn-submit" id="submitBtn" onclick="submitRequest()">
       Search Servers
@@ -459,21 +459,23 @@
     btn.querySelector('.spinner').style.display = 'block';
     btn.textContent = 'Searching...\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';
     let body = {};
+    const explain = document.getElementById('explainToggle').classList.contains('on');
+
     if (activeTab === 'structured') {
       const cpu = parseInt(document.getElementById('cpu').value, 10) || 1;
       const ram = parseInt(document.getElementById('ram').value, 10) || 1;
       const budget = parseFloat(document.getElementById('budget').value);
       const region = (document.getElementById('region').value || '').trim();
-      const explain = document.getElementById('explainToggle').classList.contains('on');
       if (!region) { showError('Please select a region.'); resetBtn(); return; }
       if (isNaN(budget) || budget <= 0) { showError('Please enter a valid monthly budget (USD).'); resetBtn(); return; }
       body = { cpu, ram, budget, region };
-      if (explain) body.include_explanation = true;
     } else {
       const query = document.getElementById('nlQuery').value.trim();
       if (!query) { showError('Please describe your requirements.'); resetBtn(); return; }
       body = { query };
     }
+
+    if (explain) body.include_explanation = true;
     try {
       const res = await fetch(API_BASE + '/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const text = await res.text();

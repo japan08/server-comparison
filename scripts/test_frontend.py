@@ -22,10 +22,9 @@ def test_frontend_served():
             assert "CloudCompare" in body or "Cloud Compare" in body, "Frontend HTML should contain app title"
             assert "recommend" in body or "Search" in body, "Frontend should reference recommend/search"
             print("OK  GET /  → frontend HTML served")
-            return True
     except urllib.error.URLError as e:
         print(f"FAIL GET /  → {e}")
-        return False
+        assert False, f"GET / failed: {e}"
 
 
 def test_recommend_response():
@@ -52,25 +51,22 @@ def test_recommend_response():
                 print(f"OK  POST /recommend  → {len(out['recommendations'])} recommendation(s), e.g. {r.get('provider')} ${r.get('price_monthly')}/mo")
             else:
                 print("OK  POST /recommend  → 200, recommendations: [] (run seed_data.py if you want sample results)")
-            return True
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         print(f"FAIL POST /recommend  → {e.code} {body[:200]}")
-        return False
+        assert False, f"POST /recommend failed: {e.code} {body[:200]}"
     except urllib.error.URLError as e:
         print(f"FAIL POST /recommend  → {e}")
-        return False
+        assert False, f"POST /recommend failed: {e}"
 
 
 def main():
     print("Testing frontend and API (server must be running on 127.0.0.1:8000)\n")
-    a = test_frontend_served()
-    b = test_recommend_response()
+    test_frontend_served()
+    test_recommend_response()
     print()
-    if a and b:
-        print("All checks passed.")
-        sys.exit(0)
-    sys.exit(1)
+    print("All checks passed.")
+    sys.exit(0)
 
 
 if __name__ == "__main__":

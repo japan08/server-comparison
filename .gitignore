@@ -1,0 +1,4 @@
+cloud_compare.db
+cloud_compare.db-shm
+cloud_compare.db-wal
+__pycache__/

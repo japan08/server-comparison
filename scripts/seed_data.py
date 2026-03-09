@@ -9,18 +9,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import app.core.database as database_module
 from sqlalchemy import select
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.models import InstancePricing, InstanceType, Provider, Region
-
-
-def _normalize_url(url: str) -> str:
-    if url.startswith("postgresql://") and "+asyncpg" not in url:
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    return url
 
 
 def _permission_help() -> None:
@@ -30,12 +24,12 @@ def _permission_help() -> None:
 
 
 async def seed() -> None:
-    url = _normalize_url(get_settings().database_url)
-    engine = create_async_engine(url, echo=False)
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    await database_module.initialize_database()
+    if database_module.async_session_factory is None:
+        raise RuntimeError("Database session factory was not initialized")
 
     try:
-        async with async_session() as session:
+        async with database_module.async_session_factory() as session:
             existing = await session.execute(select(Provider.id).limit(1))
             if existing.scalar_one_or_none() is None:
                 await _seed_initial(session)
@@ -47,8 +41,8 @@ async def seed() -> None:
         if "permission denied" in err or "insufficientprivilege" in err:
             _permission_help()
         raise
-
-    await engine.dispose()
+    finally:
+        await database_module.close_database()
 
 
 async def _seed_initial(session: AsyncSession) -> None:

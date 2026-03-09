@@ -6,13 +6,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.api.router import api_router
+from app.core.database import close_database, initialize_database
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    await initialize_database()
+    try:
+        yield
+    finally:
+        await close_database()
 
 
 app = FastAPI(

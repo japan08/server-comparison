@@ -1,10 +1,12 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_DATABASE_URL = "postgresql://cloud_compare:nitsan123@localhost:5432/cloud_compare"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DATABASE_URL = f"sqlite+aiosqlite:///{PROJECT_ROOT / 'cloud_compare.db'}"
 
 
 def _normalize_database_url(url: str) -> str:
@@ -20,6 +22,7 @@ def get_settings() -> object:
 
     class _Settings:
         database_url: str = _normalize_database_url(url)
+        fallback_database_url: str = DEFAULT_DATABASE_URL
         ollama_base_url: str = base_url
         ollama_model: str = model
 

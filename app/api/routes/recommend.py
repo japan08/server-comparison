@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import DbSession
 from app.schemas.recommendation import RecommendRequest, RecommendResponse
@@ -36,13 +37,19 @@ async def recommend(
         budget = body.budget
         region = (body.region or "").strip() or DEFAULT_REGION
 
-    recommendations = await get_recommendations(
-        session=session,
-        cpu=cpu,
-        ram=ram,
-        budget=budget,
-        region=region,
-    )
+    try:
+        recommendations = await get_recommendations(
+            session=session,
+            cpu=cpu,
+            ram=ram,
+            budget=budget,
+            region=region,
+        )
+    except (ConnectionError, OSError, SQLAlchemyError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Check DATABASE_URL and ensure PostgreSQL is running.",
+        ) from exc
 
     explanation: str | None = None
     if body.include_explanation and recommendations:

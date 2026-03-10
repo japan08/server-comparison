@@ -7,11 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import get_settings
 from app.models import Base
 
-engine = create_async_engine(
-    get_settings().database_url,
-    echo=False,
-    future=True,
-)
+settings = get_settings()
+
+
+def _create_engine(database_url: str):
+    return create_async_engine(
+        database_url,
+        echo=False,
+        future=True,
+    )
+
+
+engine = _create_engine(settings.database_url)
 
 async_session_factory = async_sessionmaker(
     engine,
@@ -20,6 +27,31 @@ async_session_factory = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+
+
+def _rebind_engine(database_url: str) -> None:
+    global engine, async_session_factory
+    engine = _create_engine(database_url)
+    async_session_factory = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
+
+async def initialize_database() -> None:
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        if settings.database_url == settings.fallback_database_url:
+            raise
+        await engine.dispose()
+        _rebind_engine(settings.fallback_database_url)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

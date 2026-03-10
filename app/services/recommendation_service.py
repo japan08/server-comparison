@@ -1,6 +1,37 @@
+import logging
+
 from sqlalchemy import and_, asc, func, or_, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models import InstancePricing, InstanceType, Provider, Region
+from app.services.demo_catalog import get_demo_recommendations
+
+logger = logging.getLogger(__name__)
+
+
+def _should_use_demo_catalog(exc: Exception) -> bool:
+    if isinstance(exc, OSError):
+        return True
+
+    message = " ".join(
+        str(part)
+        for part in (exc, getattr(exc, "orig", None))
+        if part
+    ).lower()
+    return any(
+        marker in message
+        for marker in (
+            "connection refused",
+            "could not connect",
+            "failed to establish",
+            "connection timed out",
+            "timeout expired",
+            "no such table",
+            "does not exist",
+            "undefined table",
+        )
+    )
 
 
 async def get_recommendations(
@@ -38,7 +69,18 @@ async def get_recommendations(
         .order_by(asc(InstancePricing.monthly_price_usd))
         .limit(3)
     )
-    result = await session.execute(stmt)
+    try:
+        result = await session.execute(stmt)
+    except (DBAPIError, OSError) as exc:
+        if not _should_use_demo_catalog(exc):
+            raise
+
+        # Keep /recommend usable in clean environments where Postgres
+        # is not running yet or migrations have not been applied.
+        logger.warning("Falling back to demo catalog: %s", exc)
+        await session.rollback()
+        return get_demo_recommendations(cpu=cpu, ram=ram, budget=budget, region=region)
+
     rows = result.all()
     return [
         {

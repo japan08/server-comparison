@@ -7,8 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import get_settings
 from app.models import Base
 
+database_url = get_settings().database_url
+using_sqlite = database_url.startswith("sqlite+")
+
 engine = create_async_engine(
-    get_settings().database_url,
+    database_url,
     echo=False,
     future=True,
 )
@@ -32,6 +35,15 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+async def init_db() -> None:
+    """Create tables for zero-config local SQLite runs."""
+    if not using_sqlite:
+        return
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]

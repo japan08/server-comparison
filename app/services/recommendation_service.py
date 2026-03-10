@@ -1,6 +1,11 @@
+import logging
+
 from sqlalchemy import and_, asc, func, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import InstancePricing, InstanceType, Provider, Region
+
+logger = logging.getLogger(__name__)
 
 
 async def get_recommendations(
@@ -38,7 +43,14 @@ async def get_recommendations(
         .order_by(asc(InstancePricing.monthly_price_usd))
         .limit(3)
     )
-    result = await session.execute(stmt)
+    try:
+        result = await session.execute(stmt)
+    except (SQLAlchemyError, OSError) as exc:
+        logger.warning(
+            "Recommendation query skipped because the database is unavailable: %s",
+            exc,
+        )
+        return []
     rows = result.all()
     return [
         {

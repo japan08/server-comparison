@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.core.database import DbSession
 from app.schemas.recommendation import RecommendRequest, RecommendResponse
@@ -36,13 +37,21 @@ async def recommend(
         budget = body.budget
         region = (body.region or "").strip() or DEFAULT_REGION
 
-    recommendations = await get_recommendations(
-        session=session,
-        cpu=cpu,
-        ram=ram,
-        budget=budget,
-        region=region,
-    )
+    try:
+        recommendations = await get_recommendations(
+            session=session,
+            cpu=cpu,
+            ram=ram,
+            budget=budget,
+            region=region,
+        )
+    except (OperationalError, DBAPIError, OSError) as exc:
+        # Surface database outages as a service dependency issue rather than
+        # an unhandled exception that returns a generic 500.
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Please try again later.",
+        ) from exc
 
     explanation: str | None = None
     if body.include_explanation and recommendations:

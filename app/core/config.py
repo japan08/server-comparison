@@ -1,10 +1,12 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_DATABASE_URL = "postgresql://cloud_compare:nitsan123@localhost:5432/cloud_compare"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_DATABASE_URL = f"sqlite+aiosqlite:///{(BASE_DIR / 'cloud_compare.db').as_posix()}"
 
 
 def _normalize_database_url(url: str) -> str:

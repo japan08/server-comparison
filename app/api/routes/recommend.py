@@ -1,4 +1,7 @@
+import logging
+
 from fastapi import APIRouter
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import DbSession
 from app.schemas.recommendation import RecommendRequest, RecommendResponse
@@ -6,6 +9,7 @@ from app.services.ollama_service import generate_explanation, parse_query_to_par
 from app.services.recommendation_service import get_recommendations
 
 router = APIRouter(prefix="/recommend", tags=["recommend"])
+logger = logging.getLogger(__name__)
 
 DEFAULT_CPU = 2
 DEFAULT_RAM = 4.0
@@ -36,13 +40,17 @@ async def recommend(
         budget = body.budget
         region = (body.region or "").strip() or DEFAULT_REGION
 
-    recommendations = await get_recommendations(
-        session=session,
-        cpu=cpu,
-        ram=ram,
-        budget=budget,
-        region=region,
-    )
+    try:
+        recommendations = await get_recommendations(
+            session=session,
+            cpu=cpu,
+            ram=ram,
+            budget=budget,
+            region=region,
+        )
+    except (ConnectionError, OSError, SQLAlchemyError):
+        logger.exception("Recommendation lookup failed; returning no results")
+        recommendations = []
 
     explanation: str | None = None
     if body.include_explanation and recommendations:

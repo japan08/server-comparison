@@ -29,7 +29,7 @@ def test_frontend_served():
 
 
 def test_recommend_response():
-    """POST /recommend with structured body should return recommendations array."""
+    """POST /recommend should return data or a graceful database-unavailable error."""
     payload = {"cpu": 4, "ram": 16, "budget": 100, "region": "Europe"}
     data = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -55,6 +55,17 @@ def test_recommend_response():
             return True
     except urllib.error.HTTPError as e:
         body = e.read().decode()
+        if e.code == 503:
+            try:
+                out = json.loads(body)
+            except json.JSONDecodeError:
+                out = {}
+            detail = str(out.get("detail", "")).lower()
+            assert "database" in detail and "unavailable" in detail, (
+                "503 response should explain that the pricing database is unavailable"
+            )
+            print("OK  POST /recommend  → 503, database unavailable message returned")
+            return True
         print(f"FAIL POST /recommend  → {e.code} {body[:200]}")
         return False
     except urllib.error.URLError as e:

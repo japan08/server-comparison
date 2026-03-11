@@ -1,9 +1,14 @@
-from fastapi import APIRouter
+import logging
+
+from fastapi import APIRouter, HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import DbSession
 from app.schemas.recommendation import RecommendRequest, RecommendResponse
 from app.services.ollama_service import generate_explanation, parse_query_to_params
 from app.services.recommendation_service import get_recommendations
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recommend", tags=["recommend"])
 
@@ -36,13 +41,23 @@ async def recommend(
         budget = body.budget
         region = (body.region or "").strip() or DEFAULT_REGION
 
-    recommendations = await get_recommendations(
-        session=session,
-        cpu=cpu,
-        ram=ram,
-        budget=budget,
-        region=region,
-    )
+    try:
+        recommendations = await get_recommendations(
+            session=session,
+            cpu=cpu,
+            ram=ram,
+            budget=budget,
+            region=region,
+        )
+    except (SQLAlchemyError, OSError) as exc:
+        logger.warning(
+            "Recommendation lookup failed because the pricing database is unavailable: %s",
+            exc,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Recommendations are temporarily unavailable because the pricing database cannot be reached.",
+        ) from exc
 
     explanation: str | None = None
     if body.include_explanation and recommendations:

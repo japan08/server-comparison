@@ -1,6 +1,11 @@
+import logging
+
 from sqlalchemy import and_, asc, func, or_, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import InstancePricing, InstanceType, Provider, Region
+
+logger = logging.getLogger(__name__)
 
 
 async def get_recommendations(
@@ -38,7 +43,36 @@ async def get_recommendations(
         .order_by(asc(InstancePricing.monthly_price_usd))
         .limit(3)
     )
-    result = await session.execute(stmt)
+    try:
+        result = await session.execute(stmt)
+    except DBAPIError as exc:
+        if not exc.connection_invalidated:
+            raise
+        logger.warning(
+            "Returning empty recommendations because the database query failed.",
+            exc_info=True,
+        )
+        try:
+            await session.rollback()
+        except Exception:
+            logger.warning(
+                "Failed to roll back session after recommendation query error.",
+                exc_info=True,
+            )
+        return []
+    except OSError:
+        logger.warning(
+            "Returning empty recommendations because the database query failed.",
+            exc_info=True,
+        )
+        try:
+            await session.rollback()
+        except Exception:
+            logger.warning(
+                "Failed to roll back session after recommendation query error.",
+                exc_info=True,
+            )
+        return []
     rows = result.all()
     return [
         {

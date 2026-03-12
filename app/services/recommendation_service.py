@@ -1,6 +1,12 @@
+import logging
+
 from sqlalchemy import and_, asc, func, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models import InstancePricing, InstanceType, Provider, Region
+
+logger = logging.getLogger(__name__)
 
 
 async def get_recommendations(
@@ -38,7 +44,12 @@ async def get_recommendations(
         .order_by(asc(InstancePricing.monthly_price_usd))
         .limit(3)
     )
-    result = await session.execute(stmt)
+    try:
+        result = await session.execute(stmt)
+    except (OSError, SQLAlchemyError):
+        # Keep the API usable when the local database is down or unreachable.
+        logger.warning("Database unavailable while fetching recommendations.", exc_info=True)
+        return []
     rows = result.all()
     return [
         {
